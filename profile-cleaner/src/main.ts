@@ -1,10 +1,10 @@
 // main.ts
 import fs from 'fs';
-import { CPUProfileNode, DeletedCallFrame, PerformanceProfile } from './types';
+import { CPUProfileNode, PerformanceProfile } from './types';
 
 function filterAndReparentNodes(
   nodes: CPUProfileNode[] | undefined,
-  urls: string[],
+  urlIncludes: string[],
 ): CPUProfileNode[] | undefined {
   if (!nodes) return nodes;
 
@@ -19,7 +19,7 @@ function filterAndReparentNodes(
 
   // Filter out nodes based on the URL and anonymous functions
   for (const node of nodes) {
-    const matches = urls
+    const matches = urlIncludes
       .map((url) => node.callFrame.url?.includes(url))
       .reduce((acc, curr) => acc || curr, false);
     const anonymousFunction = isAnonymousFunction(node);
@@ -82,7 +82,7 @@ function filterProfileByURL(
   return profile;
 }
 
-function isAnonymousFunction(node: CPUProfileNode): boolean {
+function isAnonymousFunction(_node: CPUProfileNode): boolean {
   return false;
 }
 
@@ -93,16 +93,13 @@ function main(traceFilePath: string, urls: string[]) {
   console.log('Updated trace saved to updated-trace.json');
 }
 
-const [
-  traceFilePath,
-  url =
-] = process.argv.slice(2);
-if (!traceFilePath || !url) {
+const [traceFilePath, urlPatternStrings] = process.argv.slice(2);
+if (!traceFilePath || !urlPatternStrings) {
   console.error('Usage: ts-node main.ts <traceFilePath> <url>');
   process.exit(1);
 }
 
-main(traceFilePath, url);
+main(traceFilePath, urlPatternStrings?.split(','));
 
 // node.callFrame.url = `http://localhost:8000/?url=${encodeURI(
 //   node.callFrame.url

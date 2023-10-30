@@ -6,20 +6,18 @@ export type CallFrame = {
   columnNumber: number;
 };
 
-export const DeletedCallFrame = Symbol("DeletedCallFrame");
+export const DeletedCallFrame = Symbol('DeletedCallFrame');
 
 export type CPUProfileNode = {
-  children: any;
+  children: number[];
   id: number;
   callFrame: CallFrame;
   parent?: number;
   [DeletedCallFrame]: boolean;
-  // ... other properties
 };
 
 export type CPUProfile = {
   nodes?: CPUProfileNode[];
-  // ... other properties
 };
 
 export type ProfileEvent = {

@@ -1,11 +1,13 @@
 {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint",
     "editor.codeActionsOnSave": {
         "source.fixAll": true
       },
-    "editor.formatOnSave": true,
+    "editor.formatOnSave": false,
     "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
     "cSpell.words": [
         "estree",
-        "powertoys"
+        "powertoys",
+        "Reparent"
     ]
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import type { OnMount } from '@monaco-editor/react';
-import type { editor } from 'monaco-editor';
+import { editor } from 'monaco-editor';
 import prettier from 'prettier/standalone';
 import * as prettierPluginBabel from 'prettier/plugins/babel';
 import * as prettierPluginESTree from 'prettier/plugins/estree';
@@ -20,17 +20,16 @@ const CodeEditor = ({
   functionName = '',
 }: CodeEditorProps) => {
   const [code, setCode] = useState('');
-  const [position, setPosition] = useState({
-    lineNumber: lineNumber,
-    columnNumber: columnNumber,
-  });
+  const codeRef = useRef(code);
+  const formattedRef = useRef('');
+
   const [formattedPosition, setFormattedPosition] = useState({
     lineNumber: 1,
     columnNumber: 1,
   });
   const [isFormatted, setIsFormatted] = useState(false);
-  // const [formattedCode, setFormattedCode] = useState('');
-  const [offset, setOffset] = useState(0);
+  const [hasEditor, setHasEditor] = useState(false);
+  const offsetRef = useRef(0);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
   useEffect(() => {
@@ -41,32 +40,7 @@ const CodeEditor = ({
 
       const contents = await (await fetch(url)).text();
       setCode(contents);
-
-      // TODO: Better handling when line and column are not found
-      // const lines = contents.split('\n');
-      // const line = lines[defaultLineNumber];
-      // let lineText;
-
-      // if (line) {
-      //     if (line.length > defaultColumnNumber) {
-      //         lineText = line.substring(defaultColumnNumber, defaultColumnNumber + 150);
-      //     } else {
-      //         lineText = `Line ${defaultLineNumber} is too short ${line.length
-      //             } expected column ${defaultColumnNumber} - other lines ${lines
-      //                 .map((line, i) =>
-      //                     i !== defaultLineNumber && line.length >= defaultColumnNumber
-      //                         ? `<div>${i}:${line.length}:${line.substring(
-      //                             defaultColumnNumber,
-      //                             defaultColumnNumber + 150
-      //                         )}</div>`
-      //                         : ''
-      //                 )
-      //                 .filter(Boolean)
-      //                 .join(',')}`;
-      //     }
-      // } else {
-      //     lineText = `Line not found: ${defaultLineNumber} of ${lines.length}}`;
-      // }
+      codeRef.current = contents;
     };
 
     fetchContents();
@@ -74,20 +48,23 @@ const CodeEditor = ({
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    setHasEditor(true);
+
     monaco.languages.registerDocumentFormattingEditProvider('javascript', {
       provideDocumentFormattingEdits: async function (
         model: editor.ITextModel,
       ) {
         setIsFormatted(true);
-
-        // Get the current cursor position as an offset
-        const offset = model.getOffsetAt({ lineNumber, column: columnNumber });
-
+        const cursorOffset = model.getOffsetAt({
+          lineNumber,
+          column: columnNumber,
+        });
+        //const cursorOffset = offsetRef.current;
         // Format the code using Prettier
-        const result = await prettier.formatWithCursor(code, {
+        const result = await prettier.formatWithCursor(codeRef.current, {
           parser: 'babel',
           plugins: [prettierPluginBabel, prettierPluginESTree],
-          cursorOffset: offset,
+          cursorOffset,
         });
 
         const range = model.getFullModelRange();
@@ -95,7 +72,7 @@ const CodeEditor = ({
 
         // Apply the formatted text and set the cursor position
         editor.executeEdits('', edits);
-        setOffset(result.cursorOffset);
+        //setOffset(result.cursorOffset);
         const newPosition = model.getPositionAt(result.cursorOffset);
         setFormattedPosition({
           lineNumber: newPosition.lineNumber,
@@ -109,6 +86,28 @@ const CodeEditor = ({
       },
     });
   };
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!hasEditor || !editor || !code) {
+      return;
+    }
+
+    const model = editor?.getModel();
+    const range = model!.getFullModelRange();
+    const edits = [{ range, text: code }];
+
+    // Apply the formatted text and set the cursor position
+    editor.executeEdits('', edits);
+    editor.setPosition({
+      lineNumber: lineNumber,
+      column: columnNumber,
+    });
+    const offset = model!.getOffsetAt({ lineNumber, column: columnNumber });
+    offsetRef.current = offset;
+    editor.revealLineInCenter(lineNumber);
+    editor.focus();
+  }, [code, hasEditor, lineNumber, columnNumber]);
 
   const formatDocument = async () => {
     const editor = editorRef.current;
@@ -129,11 +128,15 @@ const CodeEditor = ({
 
       // Apply the formatted text and set the cursor position
       editor.executeEdits('', edits);
-      editor.setPosition({
-        lineNumber: position.lineNumber,
-        column: position.columnNumber,
-      });
-      editor.revealLineInCenter(position.lineNumber);
+      const position = {
+        lineNumber: lineNumber,
+        column: columnNumber,
+      };
+      editor.setPosition(position);
+      if (offsetRef.current) {
+        offsetRef.current = model.getOffsetAt(position);
+      }
+      editor.revealLineInCenter(lineNumber);
       editor.focus();
     }
   };
@@ -164,7 +167,7 @@ const CodeEditor = ({
 
   const getPositionLabel = () => {
     if (!isFormatted) {
-      return `Ln ${position.lineNumber}, Col ${position.columnNumber}`;
+      return `Ln ${lineNumber}, Col ${columnNumber}`;
     } else {
       return `Ln ${formattedPosition.lineNumber}, Col ${formattedPosition.columnNumber}`;
     }
@@ -189,9 +192,10 @@ const CodeEditor = ({
           height="100%"
           defaultLanguage="javascript"
           theme="vs-dark"
-          value={code}
+          value={!isFormatted ? code : formattedRef.current}
           options={{
             selectOnLineNumbers: true,
+            wordWrap: 'on',
             roundedSelection: false,
             readOnly: false,
             cursorStyle: 'line',
@@ -220,3 +224,29 @@ const CodeEditor = ({
 };
 
 export default CodeEditor;
+
+// TODO: Better handling when line and column are not found
+// const lines = contents.split('\n');
+// const line = lines[defaultLineNumber];
+// let lineText;
+
+// if (line) {
+//     if (line.length > defaultColumnNumber) {
+//         lineText = line.substring(defaultColumnNumber, defaultColumnNumber + 150);
+//     } else {
+//         lineText = `Line ${defaultLineNumber} is too short ${line.length
+//             } expected column ${defaultColumnNumber} - other lines ${lines
+//                 .map((line, i) =>
+//                     i !== defaultLineNumber && line.length >= defaultColumnNumber
+//                         ? `<div>${i}:${line.length}:${line.substring(
+//                             defaultColumnNumber,
+//                             defaultColumnNumber + 150
+//                         )}</div>`
+//                         : ''
+//                 )
+//                 .filter(Boolean)
+//                 .join(',')}`;
+//     }
+// } else {
+//     lineText = `Line not found: ${defaultLineNumber} of ${lines.length}}`;
+// }

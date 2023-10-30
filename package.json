@@ -1,0 +1,4 @@
+{
+    "name": "devtools-powertoys",
+    "workspaces": ["goto-viewer", "profile-cleaner"]
+  }

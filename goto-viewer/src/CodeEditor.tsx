@@ -78,16 +78,13 @@ const CodeEditor = ({
       provideDocumentFormattingEdits: async function (
         model: editor.ITextModel,
       ) {
-        const text = model.getValue();
-
         setIsFormatted(true);
 
         // Get the current cursor position as an offset
-        const currentPosition = editor.getPosition();
-        const offset = currentPosition ? model.getOffsetAt(currentPosition) : 0;
+        const offset = model.getOffsetAt({ lineNumber, column: columnNumber });
 
         // Format the code using Prettier
-        const result = await prettier.formatWithCursor(text, {
+        const result = await prettier.formatWithCursor(code, {
           parser: 'babel',
           plugins: [prettierPluginBabel, prettierPluginESTree],
           cursorOffset: offset,
@@ -100,7 +97,7 @@ const CodeEditor = ({
         editor.executeEdits('', edits);
         setOffset(result.cursorOffset);
         const newPosition = model.getPositionAt(result.cursorOffset);
-        setPosition({
+        setFormattedPosition({
           lineNumber: newPosition.lineNumber,
           columnNumber: newPosition.column,
         });
@@ -114,20 +111,46 @@ const CodeEditor = ({
   };
 
   const formatDocument = async () => {
+    const editor = editorRef.current;
+    const model = editor?.getModel();
+    if (!editor || !model) {
+      return;
+    }
+
     if (!isFormatted) {
       const action = editorRef.current?.getAction(
         'editor.action.formatDocument',
       );
       await action?.run();
+    } else {
+      setIsFormatted(false);
+      const range = model.getFullModelRange();
+      const edits = [{ range, text: code }];
+
+      // Apply the formatted text and set the cursor position
+      editor.executeEdits('', edits);
+      editor.setPosition({
+        lineNumber: position.lineNumber,
+        column: position.columnNumber,
+      });
+      editor.revealLineInCenter(position.lineNumber);
+      editor.focus();
     }
   };
 
   const goto = () => {
-    if (editorRef.current) {
-      const position = { lineNumber: lineNumber, column: columnNumber };
-      editorRef.current.revealPosition(position);
-      editorRef.current.setPosition(position);
-      editorRef.current.focus();
+    const editor = editorRef.current;
+
+    if (editor) {
+      const position = !isFormatted
+        ? { lineNumber: lineNumber, column: columnNumber }
+        : {
+            lineNumber: formattedPosition.lineNumber,
+            column: formattedPosition.columnNumber,
+          };
+      editor.revealPosition(position);
+      editor.setPosition(position);
+      editor.focus();
     }
   };
 
@@ -137,6 +160,14 @@ const CodeEditor = ({
     }
 
     return new URL(url).pathname.split('/').pop();
+  };
+
+  const getPositionLabel = () => {
+    if (!isFormatted) {
+      return `Ln ${position.lineNumber}, Col ${position.columnNumber}`;
+    } else {
+      return `Ln ${formattedPosition.lineNumber}, Col ${formattedPosition.columnNumber}`;
+    }
   };
 
   return (
@@ -181,7 +212,7 @@ const CodeEditor = ({
           >{`{ }`}</span>
         </span>
         <span className="toolbar-item status-bar-item" onClick={goto}>
-          <span className="toolbar-label">{`Ln ${position.lineNumber}, Col ${position.columnNumber}, Offset ${offset}`}</span>
+          <span className="toolbar-label">{getPositionLabel()}</span>
         </span>
       </div>
     </>
